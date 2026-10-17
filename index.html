@@ -1,0 +1,551 @@
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Smart Student Performance Analyzer</title>
+<style>
+:root {
+  --bg:#f4f6fb;
+  --card:#ffffff;
+  --text:#172033;
+  --muted:#68738a;
+  --primary:#6257e8;
+  --line:#e6e9f2;
+}
+body.dark {
+  --bg:#111522;
+  --card:#1b2132;
+  --text:#f2f4ff;
+  --muted:#a7b0c7;
+  --line:#343c51;
+}
+* { box-sizing:border-box; }
+body {
+  margin:0;
+  background:var(--bg);
+  color:var(--text);
+  font-family:Arial,sans-serif;
+}
+header {
+  background:linear-gradient(120deg,#5146d8,#8a55e9);
+  color:white;
+  padding:25px;
+  text-align:center;
+}
+header h1 { margin:0 0 8px; }
+main { max-width:1100px; margin:25px auto; padding:0 15px; }
+button {
+  background:var(--primary);
+  color:white;
+  border:0;
+  border-radius:8px;
+  padding:10px 14px;
+  cursor:pointer;
+  margin:3px;
+}
+input {
+  width:100%;
+  padding:10px;
+  margin:5px 0 12px;
+  border:1px solid var(--line);
+  border-radius:7px;
+  background:var(--bg);
+  color:var(--text);
+}
+.panel,.stat {
+  background:var(--card);
+  border:1px solid var(--line);
+  border-radius:14px;
+  padding:18px;
+  margin-bottom:18px;
+}
+.stats {
+  display:grid;
+  grid-template-columns:repeat(4,1fr);
+  gap:12px;
+}
+.stat h2 { color:var(--primary); }
+.layout {
+  display:grid;
+  grid-template-columns:330px 1fr;
+  gap:18px;
+}
+table { width:100%; border-collapse:collapse; }
+th,td {
+  padding:10px;
+  border-bottom:1px solid var(--line);
+  text-align:left;
+  font-size:13px;
+}
+.tablewrap { overflow-x:auto; }
+.bar {
+  height:12px;
+  background:var(--line);
+  border-radius:10px;
+  margin:10px 0 18px;
+  overflow:hidden;
+}
+.fill {
+  height:100%;
+  background:linear-gradient(90deg,#6257e8,#b05be8);
+}
+.insight {
+  padding:12px;
+  margin:8px 0;
+  background:var(--bg);
+  border:1px solid var(--line);
+  border-radius:9px;
+}
+.pass { color:green; font-weight:bold; }
+.fail { color:#d33; font-weight:bold; }
+@media(max-width:800px) {
+  .layout { grid-template-columns:1fr; }
+  .stats { grid-template-columns:repeat(2,1fr); }
+}
+@media print {
+  button,.form-panel { display:none; }
+  body { background:white; color:black; }
+}
+</style>
+</head>
+<body>
+
+<header>
+  <h1>🎓 Smart Student Performance Analyzer</h1>
+  <p>Student Reports • Subject Insights • Academic Progress</p>
+  <button onclick="toggleTheme()">🌙 Dark / Light Mode</button>
+  <button onclick="window.print()">🖨️ Print Report</button>
+  <button onclick="exportCSV()">⬇ Download CSV</button>
+</header>
+
+<main>
+  <section class="stats">
+    <div class="stat">
+      <p>Total Students</p>
+      <h2 id="total">0</h2>
+    </div>
+    <div class="stat">
+      <p>Class Average</p>
+      <h2 id="average">0%</h2>
+    </div>
+    <div class="stat">
+      <p>Top Performer</p>
+      <h2 id="topper">—</h2>
+    </div>
+    <div class="stat">
+      <p>Pass Rate</p>
+      <h2 id="passrate">0%</h2>
+    </div>
+  </section>
+
+  <section class="layout">
+    <div class="panel form-panel">
+      <h2 id="formTitle">➕ Add Student</h2>
+      <form id="studentForm">
+        <label>Student Name</label>
+        <input id="studentName" required placeholder="Enter student name">
+
+        <label>Roll Number</label>
+        <input id="roll" required placeholder="Enter roll number">
+
+        <label>Maths Marks (out of 100)</label>
+        <input id="maths" type="number" min="0" max="100" required>
+
+        <label>Physics Marks (out of 100)</label>
+        <input id="physics" type="number" min="0" max="100" required>
+
+        <label>Chemistry Marks (out of 100)</label>
+        <input id="chemistry" type="number" min="0" max="100" required>
+
+        <div class="insight" id="preview">
+          Enter marks to calculate total and percentage.
+        </div>
+        <button type="submit" id="saveBtn">Save Student</button>
+        <button type="button" onclick="resetForm()">Clear</button>
+      </form>
+      <p><small>Pass rule: At least 35 marks in every subject.</small></p>
+    </div>
+
+    <div class="panel">
+      <h2>📋 Student Records</h2>
+      <input id="searchBox" placeholder="Search by name or roll number" oninput="render()">
+      <label>Sort students:</label>
+      <select id="sortBy" onchange="render()">
+        <option value="new">Newest first</option>
+        <option value="high">Highest percentage</option>
+        <option value="low">Lowest percentage</option>
+        <option value="name">Name A-Z</option>
+      </select>
+      <div class="tablewrap">
+        <table>
+          <thead>
+            <tr>
+              <th>Student</th>
+              <th>Marks (M/P/C)</th>
+              <th>Total</th>
+              <th>Percent</th>
+              <th>Grade</th>
+              <th>Status</th>
+              <th>Actions</th>
+            </tr>
+          </thead>
+          <tbody id="rows"></tbody>
+        </table>
+      </div>
+      <p id="empty">No students added yet.</p>
+    </div>
+  </section>
+
+  <section class="layout">
+    <div class="panel">
+      <h2>📊 Subject Performance</h2>
+      <div id="subjectBars"></div>
+    </div>
+    <div class="panel">
+      <h2>🧠 Smart Insights</h2>
+      <div id="insights">Add students to view insights.</div>
+      <h2>🏆 Top Five Students</h2>
+      <div id="leaderboard"></div>
+    </div>
+  </section>
+</main>
+
+<script>
+const STORAGE_KEY = "smartStudentAnalyzerRecords_v1";
+let students = [];
+let editingId = null;
+
+const $ = id => document.getElementById(id);
+
+function load() {
+  try {
+    students = JSON.parse(localStorage.getItem(STORAGE_KEY) || "[]");
+    if (!Array.isArray(students)) students = [];
+  } catch (error) {
+    students = [];
+  }
+}
+
+function save() {
+  localStorage.setItem(STORAGE_KEY, JSON.stringify(students));
+}
+
+function escapeHTML(value) {
+  return String(value).replace(/[&<>"']/g, char => ({
+    "&":"&amp;",
+    "<":"&lt;",
+    ">":"&gt;",
+    '"':"&quot;",
+    "'":"&#39;"
+  }[char]));
+}
+
+function gradeFor(percent) {
+  if (percent >= 90) return "A+";
+  if (percent >= 80) return "A";
+  if (percent >= 70) return "B";
+  if (percent >= 60) return "C";
+  if (percent >= 50) return "D";
+  if (percent >= 35) return "E";
+  return "F";
+}
+
+function calculate(student) {
+  const total =
+    Number(student.maths) +
+    Number(student.physics) +
+    Number(student.chemistry);
+
+  const percentage = total / 3;
+  const passed = [
+    student.maths,
+    student.physics,
+    student.chemistry
+  ].every(mark => Number(mark) >= 35);
+
+  return {
+    total,
+    percentage,
+    grade: gradeFor(percentage),
+    passed
+  };
+}
+
+function resetForm() {
+  $("studentForm").reset();
+  editingId = null;
+  $("formTitle").textContent = "➕ Add Student";
+  $("saveBtn").textContent = "Save Student";
+  $("preview").textContent =
+    "Enter marks to calculate total and percentage.";
+}
+
+function updatePreview() {
+  const ids = ["maths", "physics", "chemistry"];
+
+  if (!ids.every(id => $(id).value !== "")) return;
+
+  const marks = ids.map(id => Number($(id).value));
+
+  if (marks.some(mark => mark < 0 || mark > 100)) {
+    $("preview").textContent =
+      "Each subject mark must be between 0 and 100.";
+    return;
+  }
+
+  const total = marks.reduce((sum, mark) => sum + mark, 0);
+  const percentage = total / 3;
+
+  $("preview").textContent =
+    `Total: ${total}/300 | Percentage: ${percentage.toFixed(1)}% | Grade: ${gradeFor(percentage)}`;
+}
+
+["maths", "physics", "chemistry"].forEach(id => {
+  $(id).addEventListener("input", updatePreview);
+});
+
+$("studentForm").addEventListener("submit", function(event) {
+  event.preventDefault();
+
+  const studentName = $("studentName").value.trim();
+  const roll = $("roll").value.trim();
+  const marks = ["maths", "physics", "chemistry"]
+    .map(id => Number($(id).value));
+
+  if (!studentName || !roll ||
+      marks.some(mark => !Number.isFinite(mark) || mark < 0 || mark > 100)) {
+    alert("Enter valid student details and marks from 0 to 100.");
+    return;
+  }
+
+  const duplicate = students.some(student =>
+    student.roll.toLowerCase() === roll.toLowerCase() &&
+    student.id !== editingId
+  );
+
+  if (duplicate) {
+    alert("This roll number already exists.");
+    return;
+  }
+
+  const oldStudent = students.find(student => student.id === editingId);
+
+  const item = {
+    id: editingId || String(Date.now()),
+    name: studentName,
+    roll: roll,
+    maths: marks[0],
+    physics: marks[1],
+    chemistry: marks[2],
+    created: oldStudent ? oldStudent.created : Date.now()
+  };
+
+  if (editingId) {
+    students = students.map(student =>
+      student.id === editingId ? item : student
+    );
+  } else {
+    students.push(item);
+  }
+
+  save();
+  resetForm();
+  render();
+});
+
+function editStudent(id) {
+  const student = students.find(item => item.id === id);
+  if (!student) return;
+
+  editingId = id;
+  $("studentName").value = student.name;
+  $("roll").value = student.roll;
+  $("maths").value = student.maths;
+  $("physics").value = student.physics;
+  $("chemistry").value = student.chemistry;
+  $("formTitle").textContent = "✏️ Edit Student";
+  $("saveBtn").textContent = "Update Student";
+  updatePreview();
+  window.scrollTo({ top: 0, behavior: "smooth" });
+}
+
+function deleteStudent(id) {
+  const student = students.find(item => item.id === id);
+  if (!student) return;
+
+  if (confirm(`Delete ${student.name}'s record?`)) {
+    students = students.filter(item => item.id !== id);
+
+    if (editingId === id) resetForm();
+
+    save();
+    render();
+  }
+}
+
+function render() {
+  const query = $("searchBox").value.trim().toLowerCase();
+
+  let list = students.filter(student =>
+    student.name.toLowerCase().includes(query) ||
+    student.roll.toLowerCase().includes(query)
+  );
+
+  const sort = $("sortBy").value;
+
+  list.sort((a, b) => {
+    if (sort === "high") return calculate(b).percentage - calculate(a).percentage;
+    if (sort === "low") return calculate(a).percentage - calculate(b).percentage;
+    if (sort === "name") return a.name.localeCompare(b.name);
+    return b.created - a.created;
+  });
+
+  $("rows").innerHTML = list.map(student => {
+    const result = calculate(student);
+
+    return `<tr>
+      <td><b>${escapeHTML(student.name)}</b><br>${escapeHTML(student.roll)}</td>
+      <td>${student.maths} / ${student.physics} / ${student.chemistry}</td>
+      <td>${result.total}/300</td>
+      <td>${result.percentage.toFixed(1)}%</td>
+      <td><b>${result.grade}</b></td>
+      <td class="${result.passed ? "pass" : "fail"}">
+        ${result.passed ? "PASS" : "FAIL"}
+      </td>
+      <td>
+        <button onclick="editStudent('${student.id}')">Edit</button>
+        <button onclick="deleteStudent('${student.id}')">Delete</button>
+      </td>
+    </tr>`;
+  }).join("");
+
+  $("empty").style.display = list.length ? "none" : "block";
+  updateDashboard();
+}
+
+function updateDashboard() {
+  const count = students.length;
+  const results = students.map(student => ({
+    ...student,
+    ...calculate(student)
+  }));
+
+  $("total").textContent = count;
+
+  $("average").textContent = count
+    ? (results.reduce((sum, student) => sum + student.percentage, 0) / count).toFixed(1) + "%"
+    : "0%";
+
+  const ranked = [...results].sort((a, b) => b.percentage - a.percentage);
+
+  $("topper").textContent = count ? ranked[0].name : "—";
+
+  $("passrate").textContent = count
+    ? Math.round(results.filter(student => student.passed).length / count * 100) + "%"
+    : "0%";
+
+  const subjects = [
+    ["Maths", "maths"],
+    ["Physics", "physics"],
+    ["Chemistry", "chemistry"]
+  ];
+
+  $("subjectBars").innerHTML = subjects.map(([label, key]) => {
+    const average = count
+      ? students.reduce((sum, student) => sum + Number(student[key]), 0) / count
+      : 0;
+
+    return `<p><b>${label}: ${average.toFixed(1)}/100</b></p>
+      <div class="bar"><div class="fill" style="width:${average}%"></div></div>`;
+  }).join("");
+
+  if (!count) {
+    $("insights").textContent = "Add students to view insights.";
+    $("leaderboard").textContent = "Leaderboard will appear here.";
+    return;
+  }
+
+  const averages = subjects.map(([label, key]) => ({
+    label,
+    average: students.reduce((sum, student) => sum + Number(student[key]), 0) / count
+  }));
+
+  const weakest = [...averages].sort((a, b) => a.average - b.average)[0];
+  const strongest = [...averages].sort((a, b) => b.average - a.average)[0];
+  const needSupport = results.filter(student => !student.passed).length;
+
+  $("insights").innerHTML = `
+    <div class="insight">📉 Subject to improve: <b>${weakest.label}</b> — class average ${weakest.average.toFixed(1)}/100.</div>
+    <div class="insight">🌟 Strongest subject: <b>${strongest.label}</b> — class average ${strongest.average.toFixed(1)}/100.</div>
+    <div class="insight">🎯 ${needSupport} student(s) need support in at least one subject.</div>
+  `;
+
+  $("leaderboard").innerHTML = ranked.slice(0, 5).map((student, index) =>
+    `<div class="insight"><b>#${index + 1} ${escapeHTML(student.name)}</b>
+    — ${student.percentage.toFixed(1)}%</div>`
+  ).join("");
+}
+
+function exportCSV() {
+  if (!students.length) {
+    alert("No student records to download.");
+    return;
+  }
+
+  const header = [
+    "Name", "Roll Number", "Maths", "Physics", "Chemistry",
+    "Total", "Percentage", "Grade", "Status"
+  ];
+
+  const data = students.map(student => {
+    const result = calculate(student);
+
+    return [
+      student.name, student.roll,
+      student.maths, student.physics, student.chemistry,
+      result.total, result.percentage.toFixed(1) + "%",
+      result.grade, result.passed ? "PASS" : "FAIL"
+    ];
+  });
+
+  const csv = [header, ...data]
+    .map(row => row.map(value =>
+      '"' + String(value).replace(/"/g, '""') + '"'
+    ).join(","))
+    .join("\r\n");
+
+  const blob = new Blob(["\ufeff" + csv], {
+    type: "text/csv;charset=utf-8;"
+  });
+
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+
+  link.href = url;
+  link.download = "student-performance-report.csv";
+  link.click();
+
+  URL.revokeObjectURL(url);
+}
+
+function toggleTheme() {
+  document.body.classList.toggle("dark");
+
+  localStorage.setItem(
+    "smartAnalyzerTheme",
+    document.body.classList.contains("dark") ? "dark" : "light"
+  );
+}
+
+load();
+
+if (localStorage.getItem("smartAnalyzerTheme") === "dark") {
+  document.body.classList.add("dark");
+}
+
+render();
+</script>
+</body>
+</html>
